@@ -77,19 +77,8 @@ Aplikasi akan berjalan di `http://localhost:8000`
 
 ## 📁 Struktur Project
 
-```
-bali-travel-agent-backend/
-├── app/
-│   ├── main.py          # Entry point aplikasi
-│   ├── models/          # Database models
-│   ├── routes/          # API routes
-│   └── services/        # Business logic
-├── requirements.txt     # Python dependencies
-├── .env                 # Environment variables
-└── README.md           # Dokumentasi
-```
 
-
+```
 
 ## 🛠️ Development
 
@@ -112,8 +101,7 @@ uvicorn app.main:app --reload
 MongoDB collections yang digunakan:
 
 - **users** - Data pengguna dan OAuth tokens
-- **chat_sessions** - Sesi percakapan
-- **chat_messages** - Pesan dalam sesi
+- **histories** - histories chat
 
 ## 🔐 Keamanan
 
