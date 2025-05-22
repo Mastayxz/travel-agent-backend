@@ -1,7 +1,11 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import MongoClient
-from app.config import MONGO_DETAILS, DATABASE_NAME
-client = MongoClient("mongodb+srv://masta:masta123@mastaverse.mqbexf4.mongodb.net/chatbot")
+from app.config import MONGO_URI, DATABASE_NAME
+import os
+from dotenv import load_dotenv
+
+load_dotenv()  
+client = MongoClient(MONGO_URI)
 db = client.chatbot
 users_collection = db.users
 history_collection = db.histories

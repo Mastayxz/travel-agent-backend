@@ -7,7 +7,7 @@ from google.genai import types  # Import genai types untuk Content
 # Definisi agent
 travel_agent = Agent(
     model="gemini-2.0-flash",
-    name="bali_travel_agent",
+    name="bali_travel_agent",   
     description="Asisten wisata ramah yang membantu liburan ke Bali secara menyenangkan",
     instruction="""
 Kamu adalah travel guide lokal digital yang ceria, helpful, dan hanya fokus pada wisata di Bali. Tugasmu adalah membantu user dengan cara ngobrol santai, kasih insight menarik, dan saran jujur seperti teman lokal.

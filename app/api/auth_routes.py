@@ -5,6 +5,12 @@ from google.auth.transport import requests
 from pymongo import MongoClient
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
+# config.py
+import os
+from dotenv import load_dotenv
+
+load_dotenv()  # load file .env
+
 router = APIRouter()
 # origins = [
 #     "http://localhost:5500",
@@ -20,10 +26,10 @@ router = APIRouter()
 #     allow_headers=["*"],    # izinkan semua headers
 # )
 # Ganti dengan Google Client ID milikmu
-GOOGLE_CLIENT_ID = "1012341806322-on472qvgiii3k104bvrllockvfgv9mh8.apps.googleusercontent.com"
-
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+MONGO_URI = os.getenv("MONGO_URI")
 # MongoDB Atlas connection
-client = MongoClient("mongodb+srv://masta:masta123@mastaverse.mqbexf4.mongodb.net/chatbot")
+client = MongoClient(MONGO_URI)
 db = client.chatbot
 users_collection = db.users
 history_collection = db.histories
