@@ -44,7 +44,11 @@ python -m venv venv
 ### 3. Install Dependencies
 
 ```bash
-pip install -r requirements.txt
+pip fastapi uvicorn pymongo python-dotenv  
+pip install google-auth google-auth-oauthlib google-auth-httplib2  
+pip install google-adk                            
+pip install httpx                                      
+pip install fastapi uv
 ```
 
 ### 4. Konfigurasi Environment
@@ -75,7 +79,7 @@ uvicorn app.main:app --reload
 
 Aplikasi akan berjalan di `http://localhost:8000`
 
-## 📁 Struktur Project
+
 
 
 ```
