@@ -21,9 +21,16 @@ from app.api import agent, auth_routes, history_routes
 import logging
 import os
 from dotenv import load_dotenv
-
+import firebase_admin
+from firebase_admin import credentials, auth
 # Load .env file
 load_dotenv()
+
+cred = credentials.Certificate("chatbot-df6c2-firebase-adminsdk-fbsvc-f7f47d1f49.json")
+firebase_admin.initialize_app(cred)
+# cred = credentials.Certificate(os.getenv("GOOGLE_CREDENTIALS_PATH"))
+
+# firebase_admin.initialize_app(cred)
 
 # Check for API key
 google_api_key = os.environ.get('GOOGLE_API_KEY')
@@ -49,7 +56,7 @@ app = FastAPI(
 # Setup CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5500", "http://127.0.0.1:5500"],  # Untuk development, untuk production sebaiknya tentukan domain spesifik
+    allow_origins=["*"],  # atau spesifik: ["http://localhost:5173"]
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

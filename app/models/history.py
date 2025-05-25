@@ -8,7 +8,7 @@ class Message(BaseModel):
     timestamp: Optional[datetime] = None
 
 class ChatHistory(BaseModel):
-    google_id: str
+    firebase_uid: str
     session_id: str
     messages: List[Message]
     timestamp: Optional[datetime] = None

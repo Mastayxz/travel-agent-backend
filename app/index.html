@@ -1,20 +1,36 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
+    <meta charset="UTF-8">
+    <title>Login with Google</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
 <body>
+    <h2>Login with Google</h2>
+
+    <!-- Google Sign-In Container -->
     <div id="g_id_onload" data-client_id="1012341806322-on472qvgiii3k104bvrllockvfgv9mh8.apps.googleusercontent.com"
         data-callback="handleCredentialResponse">
     </div>
 
     <div class="g_id_signin" data-type="standard"></div>
 
+    <!-- Output area -->
+    <div>
+        <h3>ID Token:</h3>
+        <p id="id_token_output">Belum login</p>
+    </div>
+
     <script>
         function handleCredentialResponse(response) {
             const token = response.credential;
+
+            // Tampilkan ID Token di halaman
+            document.getElementById("id_token_output").innerText = token;
+
+            // Kirim token ke backend
             fetch("http://localhost:8000/auth/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -24,6 +40,9 @@
                 .then(data => {
                     console.log("Login Success", data);
                     localStorage.setItem("user_id", data.user.google_id);
+                })
+                .catch(err => {
+                    console.error("Login error:", err);
                 });
         }
     </script>

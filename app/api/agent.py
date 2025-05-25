@@ -14,7 +14,8 @@ from google.genai import types
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from typing import List
-
+import firebase_admin
+from firebase_admin import auth as firebase_auth
 # Import travel agent
 from agents.travel_agent import travel_agent
 
@@ -46,173 +47,32 @@ async def verify_google_token(credentials: HTTPAuthorizationCredentials = Depend
         logger.error(f"Token verification failed: {str(e)}")
         raise HTTPException(status_code=401, detail="Token tidak valid atau kadaluarsa")
 
+
+
+async def verify_firebase_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+    try:
+        decoded_token = firebase_auth.verify_id_token(token)
+        return {
+            "email": decoded_token.get("email"),
+            "name": decoded_token.get("name"),
+            "picture": decoded_token.get("picture"),
+            "uid": decoded_token.get("uid")
+        }
+    except Exception as e:
+        logger.error(f"Firebase token verification failed: {str(e)}")
+        raise HTTPException(status_code=401, detail="Token tidak valid atau kadaluarsa")
 # Dummy content types
 class QueryInput(BaseModel):
     email: str
     query: str
     session_id: Optional[str] = None
-# class types:
-#     class Part:
-#         def __init__(self, text):
-#             self.text = text
-
-#     class Content:
-#         def __init__(self, role, parts):
-#             self.role = role
-#             self.parts = parts
-
-# # Dummy session service
-# class InMemorySessionService:
-#     def create_session(self, app_name, user_id):
-#         class Session:
-#             id = str(uuid.uuid4())
-#         return Session()
-
-# # Runner yang benar-benar memanggil agent
-# class Runner:
-#     def __init__(self, agent, session_service, app_name):
-#         self.agent = agent
-#         self.session_service = session_service
-#         self.app_name = app_name
-
-#     async def run_async(self, session_id, user_id, new_message: List[types.Content]):
-#         try:
-#             # Gunakan callable interface dari agent
-#             response = await self.agent(new_message)
-
-#             class Event:
-#                 is_final_response = True
-#                 content = types.Content(
-#                     role="agent",
-#                     parts=[types.Part(text=response.text)]
-#                 )
-
-#             yield Event()
-
-#         except Exception as e:
-#             logger.error("Agent failed to respond.")
-#             raise e
-
-
-# # ==== INISIALISASI AGEN ====
-# # from some_agent_library import travel_agent  # <- Pastikan ini agen yang valid
-
-# # Endpoint
-# @router.post("/ask")
-# async def ask_agent(
-#     data: QueryInput,
-#     user_data: dict = Depends(verify_google_token)
-# ):
-#     if data.email != user_data["email"]:
-#         raise HTTPException(status_code=401, detail="Email tidak cocok dengan token")
-
-#     try:
-#         logger.info(f"Processing query: {data.query} dari user: {user_data.get('name', 'Unknown')}")
-
-#         # Ambil atau buat session_id
-#         session_id = data.session_id or str(uuid.uuid4())
-
-#         # Ambil histori chat lama (jika ada)
-#         existing_chat = history_collection.find_one({
-#             "google_id": user_data["sub"],
-#             "session_id": session_id
-#         })
-
-#         # Bangun konteks percakapan sebagai list of Content
-#         chat_history: List[types.Content] = []
-
-#         if existing_chat:
-#             for msg in existing_chat["messages"]:
-#                 chat_history.append(types.Content(
-#                     role=msg["role"],
-#                     parts=[types.Part(text=msg["content"])]
-#                 ))
-
-#         # Tambahkan query user terbaru
-#         chat_history.append(types.Content(
-#             role='user',
-#             parts=[types.Part(text=data.query)]
-#         ))
-
-#         # Setup agent dan runner
-#         session_service = InMemorySessionService()
-#         session = session_service.create_session(
-#             app_name="bali_travel_guide",
-#             user_id=data.email
-#         )
-
-#         runner = Runner(
-#             agent=travel_agent,
-#             session_service=session_service,
-#             app_name="bali_travel_guide"
-#         )
-
-#         result = ""
-#         async for event in runner.run_async(
-#             session_id=session.id,
-#             user_id=data.email,
-#             new_message=chat_history  # Bukan hanya message terakhir, tapi full chat
-#         ):
-#             if getattr(event, "is_final_response", False):
-#                 if hasattr(event, "content") and hasattr(event.content, "parts"):
-#                     for part in event.content.parts:
-#                         if hasattr(part, "text") and part.text:
-#                             result += part.text
-
-#         # Simpan ke history
-#         from app.models.history import Message
-
-#         user_message = Message(
-#             role="user",
-#             content=data.query,
-#             timestamp=datetime.utcnow()
-#         )
-
-#         agent_message = Message(
-#             role="agent",
-#             content=result,
-#             timestamp=datetime.utcnow()
-#         )
-
-#         if existing_chat:
-#             history_collection.update_one(
-#                 {"google_id": user_data["sub"], "session_id": session_id},
-#                 {
-#                     "$push": {
-#                         "messages": {
-#                             "$each": [user_message.dict(), agent_message.dict()]
-#                         }
-#                     },
-#                     "$set": {"timestamp": datetime.utcnow()}
-#                 }
-#             )
-#         else:
-#             new_history = ChatHistory(
-#                 google_id=user_data["sub"],
-#                 session_id=session_id,
-#                 messages=[user_message, agent_message],
-#                 timestamp=datetime.utcnow()
-#             )
-#             history_collection.insert_one(new_history.dict())
-
-#         return {
-#             "user_name": user_data.get("name", ""),
-#             "email": data.email,
-#             "query": data.query,
-#             "response": result,
-#             "session_id": session_id
-#         }
-
-#     except Exception as e:
-#         logger.error(f"Error: {str(e)}")
-#         logger.error(traceback.format_exc())
-#         raise HTTPException(status_code=500, detail=f"Gagal memproses permintaan: {str(e)}")
 
 
 @router.post("/ask")
 async def ask_agent(
     data: QueryInput,
-    user_data: dict = Depends(verify_google_token)
+    user_data: dict = Depends(verify_firebase_token)  # ganti di sini
 ):
     if data.email != user_data["email"]:
         raise HTTPException(status_code=401, detail="Email tidak cocok dengan token")
@@ -223,7 +83,7 @@ async def ask_agent(
         # Ambil histori chat
         session_id = data.session_id or str(uuid.uuid4())
         existing_chat = history_collection.find_one({
-            "google_id": user_data["sub"],
+            "firebase_uid": user_data["uid"], 
             "session_id": session_id
         })
 
@@ -297,8 +157,8 @@ async def ask_agent(
         )
 
         if existing_chat:
-            history_collection.update_one(
-                {"google_id": user_data["sub"], "session_id": session_id},
+             history_collection.update_one(
+                {"firebase_uid": user_data["uid"], "session_id": session_id},
                 {
                     "$push": {
                         "messages": {
@@ -310,7 +170,7 @@ async def ask_agent(
             )
         else:
             new_history = ChatHistory(
-                google_id=user_data["sub"],
+                firebase_uid=user_data["uid"],
                 session_id=session_id,
                 messages=[user_message, agent_message],
                 timestamp=datetime.utcnow()
