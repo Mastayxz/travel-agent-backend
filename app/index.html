@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -26,7 +26,7 @@
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            const formData = new FormData(form);
+            const formData = new FormData(form);    
             const responseOutput = document.getElementById('response-output');
 
             try {
@@ -42,6 +42,27 @@
             }
         });
     </script>
+</body>
+
+</html> -->
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Analyze Document</title>
+</head>
+
+<body>
+    <h2>Upload PDF untuk Analisa</h2>
+    <form action="http://localhost:8000/api/analyze-document" method="post" enctype="multipart/form-data">
+        <label for="file">PDF file:</label>
+        <input type="file" name="file" accept="application/pdf" required><br><br>
+
+        <label for="prompt">Prompt:</label>
+        <input type="text" name="prompt" value="Summarize this document"><br><br>
+
+        <button type="submit">Analyze</button>
+    </form>
 </body>
 
 </html>

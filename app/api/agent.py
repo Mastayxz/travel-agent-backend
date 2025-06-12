@@ -407,3 +407,51 @@ async def analyze_image(
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+   # app/api/agent.py
+
+
+# app/api/agent.py
+from fastapi import APIRouter, UploadFile, File, Form
+from fastapi.responses import JSONResponse
+from google import genai
+import pathlib
+import tempfile
+import traceback
+import os
+from dotenv import load_dotenv
+
+# load_dotenv()
+
+# genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+client = genai.Client()
+
+# router = APIRouter()
+
+@router.post("/analyze-document")
+async def analyze_document(
+    file: UploadFile = File(...),
+    prompt: str = Form("Summarize this document")
+):
+    try:
+        # Simpan file sementara
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(await file.read())
+            tmp_path = pathlib.Path(tmp.name)
+
+        # Upload ke Google
+        uploaded_file = client.files.upload(file=tmp_path)
+
+        # Panggil model
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[uploaded_file, prompt]
+        )
+
+        # Hapus file lokal
+        tmp_path.unlink()
+
+        return {"response": response.text}
+
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": str(e)})
