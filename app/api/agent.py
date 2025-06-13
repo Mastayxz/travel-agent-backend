@@ -108,7 +108,7 @@ async def ask_agent(
 
         # Siapkan runner dan session
         session_service = InMemorySessionService()
-        session = session_service.create_session(
+        session = await session_service.create_session(
             app_name="bali_travel_guide",
             user_id=data.email
         )
