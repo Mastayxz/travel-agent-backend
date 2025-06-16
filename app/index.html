@@ -1,51 +1,68 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="en">
 
 <head>
     <meta charset="UTF-8">
-    <title>Login with Google</title>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <title>Gemini Image Analyzer</title>
 </head>
 
 <body>
-    <h2>Login with Google</h2>
+    <h2>Gemini Image Analyzer</h2>
+    <form id="image-form" enctype="multipart/form-data">
+        <label for="prompt">Prompt:</label><br>
+        <input type="text" id="prompt" name="prompt" required><br><br>
 
-    <!-- Google Sign-In Container -->
-    <div id="g_id_onload" data-client_id="1012341806322-on472qvgiii3k104bvrllockvfgv9mh8.apps.googleusercontent.com"
-        data-callback="handleCredentialResponse">
-    </div>
+        <label for="file">Upload Image:</label><br>
+        <input type="file" id="file" name="file" accept="image/*" required><br><br>
 
-    <div class="g_id_signin" data-type="standard"></div>
+        <button type="submit">Analyze</button>
+    </form>
 
-    <!-- Output area -->
-    <div>
-        <h3>ID Token:</h3>
-        <p id="id_token_output">Belum login</p>
-    </div>
+    <h3>Response:</h3>
+    <pre id="response-output"></pre>
 
     <script>
-        function handleCredentialResponse(response) {
-            const token = response.credential;
+        const form = document.getElementById('image-form');
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
 
-            // Tampilkan ID Token di halaman
-            document.getElementById("id_token_output").innerText = token;
+            const formData = new FormData(form);    
+            const responseOutput = document.getElementById('response-output');
 
-            // Kirim token ke backend
-            fetch("http://localhost:8000/auth/login", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ token: token })
-            })
-                .then(res => res.json())
-                .then(data => {
-                    console.log("Login Success", data);
-                    localStorage.setItem("user_id", data.user.google_id);
-                })
-                .catch(err => {
-                    console.error("Login error:", err);
+            try {
+                const response = await fetch('http://localhost:8000/api/analyze-image', {
+                    method: 'POST',
+                    body: formData
                 });
-        }
+
+                const data = await response.json();
+                responseOutput.textContent = data.response || data.error;
+            } catch (err) {
+                responseOutput.textContent = 'Error: ' + err.message;
+            }
+        });
     </script>
+</body>
+
+</html> -->
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Analyze Document</title>
+</head>
+
+<body>
+    <h2>Upload PDF untuk Analisa</h2>
+    <form action="http://localhost:8000/api/analyze-document" method="post" enctype="multipart/form-data">
+        <label for="file">PDF file:</label>
+        <input type="file" name="file" accept="application/pdf" required><br><br>
+
+        <label for="prompt">Prompt:</label>
+        <input type="text" name="prompt" value="Summarize this document"><br><br>
+
+        <button type="submit">Analyze</button>
+    </form>
 </body>
 
 </html>

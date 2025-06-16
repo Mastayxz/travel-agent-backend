@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Request, APIRouter
-from pydantic import BaseModel  
+from pydantic import BaseModel, EmailStr, validator  
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from pymongo import MongoClient
@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
 from firebase_admin import auth as firebase_auth
+
 load_dotenv()  # load file .env
 
 router = APIRouter()
@@ -61,3 +62,36 @@ async def login(token_data: TokenData):
         return {"message": "Login success", "user": user}
     except Exception as e:
         raise HTTPException(status_code=401, detail="Invalid Firebase token")
+    
+class RegisterData(BaseModel):
+    email: EmailStr
+    password: str
+    name: str = None  # Optional
+
+@router.post("/register")
+async def register(token_data: TokenData):
+    try:
+        # Verifikasi ID token Firebase dari frontend
+        decoded_token = firebase_auth.verify_id_token(token_data.token)
+        email = decoded_token["email"]
+        uid = decoded_token["uid"]
+        name = decoded_token.get("name") or email.split("@")[0]
+        picture = decoded_token.get("picture", "")
+
+        user = {
+            "firebase_uid": uid,
+            "email": email,
+            "name": name,
+            "picture": picture,
+        }
+
+        # Simpan user jika belum ada
+        users_collection.update_one(
+            {"firebase_uid": uid},
+            {"$setOnInsert": user},
+            upsert=True
+        )
+
+        return {"message": "Register success", "user": user}
+    except Exception as e:
+        raise HTTPException(status_code=401, detail="Invalid Firebase token")

@@ -44,10 +44,11 @@ python -m venv venv
 ### 3. Install Dependencies
 
 ```bash
-pip fastapi uvicorn pymongo python-dotenv  
+pip install fastapi uvicorn pymongo python-dotenv  
 pip install google-auth google-auth-oauthlib google-auth-httplib2  
 pip install google-adk                            
-pip install httpx                                      
+pip install httpx                            
+pip install fastapi uvicorn motor pydantic                                                                                                
 pip install fastapi uv
 ```
 

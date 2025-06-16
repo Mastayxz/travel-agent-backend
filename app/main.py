@@ -26,7 +26,7 @@ from firebase_admin import credentials, auth
 # Load .env file
 load_dotenv()
 
-cred = credentials.Certificate("chatbot-df6c2-firebase-adminsdk-fbsvc-f7f47d1f49.json")
+cred = credentials.Certificate("bali-pitu-firebase-adminsdk-fbsvc-a2939eece8.json")
 firebase_admin.initialize_app(cred)
 # cred = credentials.Certificate(os.getenv("GOOGLE_CREDENTIALS_PATH"))
 
@@ -56,7 +56,7 @@ app = FastAPI(
 # Setup CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # atau spesifik: ["http://localhost:5173"]
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5500"],  # ganti sesuai asal frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -163,5 +163,3 @@ if __name__ == "__main__":
 #     })
 
 #     return {"reply": bot_reply}
-
-

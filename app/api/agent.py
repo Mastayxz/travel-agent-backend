@@ -18,6 +18,7 @@ import firebase_admin
 from firebase_admin import auth as firebase_auth
 # Import travel agent
 from agents.travel_agent import travel_agent
+import re
 
 # Import history model & MongoDB collection
 from app.models.history import ChatHistory, Message
@@ -69,26 +70,52 @@ class QueryInput(BaseModel):
     session_id: Optional[str] = None
 
 
+
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+import os
+from dotenv import load_dotenv
+import google.generativeai as genai
+
 @router.post("/ask")
 async def ask_agent(
-    data: QueryInput,
-    user_data: dict = Depends(verify_firebase_token)  # ganti di sini
+    request: Request,
+    email: Optional[str] = Form(None),
+    query: Optional[str] = Form(None),
+    session_id: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    user_data: dict = Depends(verify_firebase_token)
 ):
-    if data.email != user_data["email"]:
-        raise HTTPException(status_code=401, detail="Email tidak cocok dengan token")
-
     try:
-        logger.info(f"Processing query: {data.query} dari user: {user_data.get('name')}")
+        content_type = request.headers.get("content-type", "")
 
-        # Ambil histori chat
-        session_id = data.session_id or str(uuid.uuid4())
+        # Handle application/json request
+        if "application/json" in content_type:
+            data = await request.json()
+            email = data.get("email")
+            query = data.get("query")
+            session_id = data.get("session_id")
+
+        # Validasi input
+        if not email or not query:
+            raise HTTPException(status_code=400, detail="Email dan query wajib diisi.")
+
+        # Validasi email
+        if email != user_data["email"]:
+            raise HTTPException(status_code=401, detail="Email tidak cocok dengan token")
+
+        logger.info(f"Processing query: {query} dari user: {user_data.get('name')}")
+
+        session_id = session_id or str(uuid.uuid4())
+
+        # Ambil histori lama
         existing_chat = history_collection.find_one({
-            "firebase_uid": user_data["uid"], 
+            "firebase_uid": user_data["uid"],
             "session_id": session_id
         })
 
         chat_history: List[types.Content] = []
-
         if existing_chat:
             for msg in existing_chat["messages"]:
                 chat_history.append(
@@ -98,58 +125,89 @@ async def ask_agent(
                     )
                 )
 
-        # Tambahkan pesan user terbaru ke dalam history
-        chat_history.append(
-            types.Content(
-                role="user",
-                parts=[types.Part(text=data.query)]
-            )
-        )
+        # Tambahkan pesan user (dengan atau tanpa gambar)
+        if file:
+            contents = await file.read()
+            image_parts = [types.Part(
+                inline_data=types.Blob(
+                    mime_type=file.content_type,
+                    data=contents
+                )
+            )]
 
-        # Siapkan runner dan session
+            image_prompt = types.Part(text="""
+            Kamu adalah pemandu wisata ahli yang bisa mengenali destinasi dari gambar.
+            Analisis gambar ini untuk memberikan informasi wisata yang relevan di Bali.
+            """)
+
+            chat_history.append(
+                types.Content(
+                    role="user",
+                    parts=[image_prompt] + image_parts + [types.Part(text=query)]
+                )
+            )
+        else:
+            chat_history.append(
+                types.Content(
+                    role="user",
+                    parts=[types.Part(text=query)]
+                )
+            )
+
+        # Jalankan agent
         session_service = InMemorySessionService()
         session = await session_service.create_session(
             app_name="bali_travel_guide",
-            user_id=data.email
+            user_id=email
         )
+        
 
         runner = Runner(
             agent=travel_agent,
             session_service=session_service,
             app_name="bali_travel_guide"
         )
+                # Siapkan konteks dalam bentuk teks (dari riwayat sebelumnya)
         context_text = ""
-        for content in chat_history:
+        for content in chat_history[:-1]:
             role = content.role
             for part in content.parts:
                 context_text += f"{role}: {part.text}\n"
 
-        new_message = types.Content(
-            role="user",
-            parts=[types.Part(text=context_text)]
-        )
+        # Ambil pesan terakhir sebagai new_message (bisa gambar/teks)
+        new_message = chat_history[-1]
 
+        # Sisipkan konteks teks ini sebagai awal dari `new_message.parts`
+        # supaya model tahu konteks sebelumnya
+        if new_message.parts and new_message.parts[0].text:
+            new_message.parts[0].text = f"Konteks sebelumnya:\n{context_text.strip()}\n\n{new_message.parts[0].text}"
+        else:
+            # jika part pertama bukan teks, tambahkan teks baru di awal
+            new_message.parts.insert(0, types.Part(text=f"Konteks sebelumnya:\n{context_text.strip()}"))
         result = ""
+        # Jalankan seperti biasa
         async for event in runner.run_async(
             session_id=session.id,
-            user_id=data.email,
-            new_message=new_message  # KIRIM CONTENT BUKAN LIST
+            user_id=email,
+            new_message=new_message
         ):
-    
+            ...
 
+            ...
+        
             if hasattr(event, 'is_final_response') and event.is_final_response:
                 if hasattr(event, 'content') and hasattr(event.content, 'parts'):
                     for part in event.content.parts:
                         if hasattr(part, 'text') and part.text:
-                            result += part.text
+                            clean_text = re.sub(r"[*]{1,2}", "", part.text)
+                            result += clean_text
 
-        # Simpan pesan user dan agent ke history
+        # Simpan pesan ke histori
         user_message = Message(
             role="user",
-            content=data.query,
+            content=query,
             timestamp=datetime.utcnow()
         )
-
         agent_message = Message(
             role="agent",
             content=result,
@@ -157,7 +215,7 @@ async def ask_agent(
         )
 
         if existing_chat:
-             history_collection.update_one(
+            history_collection.update_one(
                 {"firebase_uid": user_data["uid"], "session_id": session_id},
                 {
                     "$push": {
@@ -179,37 +237,61 @@ async def ask_agent(
 
         return {
             "user_name": user_data.get("name"),
-            "email": data.email,
-            "query": data.query,
+            "email": email,
+            "query": query,
             "response": result,
+            "image_url": file.filename if file else None,
             "session_id": session_id
         }
 
     except Exception as e:
-        logger.error(f"Agent failed to respond.")
-        logger.error(f"Error: {str(e)}")
+        logger.error(f"Agent failed to respond: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Gagal memproses permintaan: {str(e)}")
 
 
 
-# # ====== ROUTE UTAMA /ASK ======
+
+
 # @router.post("/ask")
 # async def ask_agent(
 #     data: QueryInput,
-#     user_data: dict = Depends(verify_google_token)
+#     # file: Optional[UploadFile] = File(None),
+#     user_data: dict = Depends(verify_firebase_token)  # ganti di sini
 # ):
 #     if data.email != user_data["email"]:
 #         raise HTTPException(status_code=401, detail="Email tidak cocok dengan token")
-
-#     # Filter query: hanya menerima query yang mengandung "bali"
-#     if "bali" not in data.query.lower():
-#         return {"response": "Maaf, saya hanya bisa menjawab pertanyaan seputar Bali."}
-
+    
 #     try:
-#         logger.info(f"Processing query: {data.query} dari user: {user_data['name']}")
+#         logger.info(f"Processing query: {data.query} dari user: {user_data.get('name')}")
 
-#         # Setup session dengan InMemorySessionService (jangan bikin baru terus, idealnya disimpan di luar fungsi)
+#         # Ambil histori chat
+#         session_id = data.session_id or str(uuid.uuid4())
+#         existing_chat = history_collection.find_one({
+#             "firebase_uid": user_data["uid"], 
+#             "session_id": session_id
+#         })
+
+#         chat_history: List[types.Content] = []
+
+#         if existing_chat:
+#             for msg in existing_chat["messages"]:
+#                 chat_history.append(
+#                     types.Content(
+#                         role=msg["role"],
+#                         parts=[types.Part(text=msg["content"])]
+#                     )
+#                 )
+
+#         # Tambahkan pesan user terbaru ke dalam history
+#         chat_history.append(
+#             types.Content(
+#                 role="user",
+#                 parts=[types.Part(text=data.query)]
+#             )
+#         )
+
+#         # Siapkan runner dan session
 #         session_service = InMemorySessionService()
 #         session = session_service.create_session(
 #             app_name="bali_travel_guide",
@@ -221,29 +303,34 @@ async def ask_agent(
 #             session_service=session_service,
 #             app_name="bali_travel_guide"
 #         )
+#         context_text = ""
+#         for content in chat_history:
+#             role = content.role
+#             for part in content.parts:
+#                 context_text += f"{role}: {part.text}\n"
 
-#         content = types.Content(
-#             role='user',
-#             parts=[types.Part(text=data.query)]
+#         new_message = types.Content(
+#             role="user",
+#             parts=[types.Part(text=context_text)]
 #         )
 
 #         result = ""
-
-#         # Jalankan agent dan kumpulkan response
 #         async for event in runner.run_async(
 #             session_id=session.id,
 #             user_id=data.email,
-#             new_message=content
+#             new_message=new_message  # KIRIM CONTENT BUKAN LIST
 #         ):
+    
+
 #             if hasattr(event, 'is_final_response') and event.is_final_response:
 #                 if hasattr(event, 'content') and hasattr(event.content, 'parts'):
 #                     for part in event.content.parts:
 #                         if hasattr(part, 'text') and part.text:
-#                             result += part.text
+#                             clean_text = re.sub(r"[*]{1,2}", "", part.text)
+#                             result += clean_text
 
-#         # Gunakan session_id yang dikirim, atau buat baru kalau kosong
-#         session_id = data.session_id or str(uuid.uuid4())
 
+#         # Simpan pesan user dan agent ke history
 #         user_message = Message(
 #             role="user",
 #             content=data.query,
@@ -256,16 +343,9 @@ async def ask_agent(
 #             timestamp=datetime.utcnow()
 #         )
 
-#         # Cari history chat yang sudah ada berdasarkan google_id dan session_id
-#         existing_chat = history_collection.find_one({
-#             "google_id": user_data["sub"],
-#             "session_id": session_id
-#         })
-
 #         if existing_chat:
-#             # Update history: push user & agent message ke array messages dengan $each supaya flat array
-#             history_collection.update_one(
-#                 {"google_id": user_data["sub"], "session_id": session_id},
+#              history_collection.update_one(
+#                 {"firebase_uid": user_data["uid"], "session_id": session_id},
 #                 {
 #                     "$push": {
 #                         "messages": {
@@ -276,18 +356,16 @@ async def ask_agent(
 #                 }
 #             )
 #         else:
-#             # Kalau belum ada history, buat baru
 #             new_history = ChatHistory(
-#                 google_id=user_data["sub"],
+#                 firebase_uid=user_data["uid"],
 #                 session_id=session_id,
 #                 messages=[user_message, agent_message],
 #                 timestamp=datetime.utcnow()
 #             )
 #             history_collection.insert_one(new_history.dict())
 
-#         # Return response plus session_id untuk dipakai terus kalau mau lanjut chat
 #         return {
-#             "user_name": user_data["name"],
+#             "user_name": user_data.get("name"),
 #             "email": data.email,
 #             "query": data.query,
 #             "response": result,
@@ -295,16 +373,85 @@ async def ask_agent(
 #         }
 
 #     except Exception as e:
+#         logger.error(f"Agent failed to respond.")
 #         logger.error(f"Error: {str(e)}")
 #         logger.error(traceback.format_exc())
 #         raise HTTPException(status_code=500, detail=f"Gagal memproses permintaan: {str(e)}")
 
-# # ====== DEBUGGING ENDPOINT ======
-# @router.post("/debug")
-# async def debug_request(request: Request):
-#     body = await request.json()
-#     return {
-#         "received": body,
-#         "google_api_key_set": "GOOGLE_API_KEY" in os.environ,
-#         "travel_agent_type": str(type(travel_agent))
-#     }
+
+
+
+@router.post("/analyze-image")
+async def analyze_image(
+    file: UploadFile = File(...),
+    prompt: str = Form(...)
+):
+    try:
+        contents = await file.read()
+
+        image_parts = [{
+            "mime_type": file.content_type,
+            "data": contents
+        }]
+
+        input_prompt = """
+        You are an expert in identifying tourist destinations.
+        You will receive input images and a prompt.
+        Based on the image and prompt, analyze and answer accordingly.
+        """
+
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        response = model.generate_content([input_prompt, image_parts[0], prompt])
+
+        return {"response": response.text}
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+   # app/api/agent.py
+
+
+# app/api/agent.py
+from fastapi import APIRouter, UploadFile, File, Form
+from fastapi.responses import JSONResponse
+from google import genai
+import pathlib
+import tempfile
+import traceback
+import os
+from dotenv import load_dotenv
+
+# load_dotenv()
+
+# genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+client = genai.Client()
+
+# router = APIRouter()
+
+@router.post("/analyze-document")
+async def analyze_document(
+    file: UploadFile = File(...),
+    prompt: str = Form("Summarize this document")
+):
+    try:
+        # Simpan file sementara
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(await file.read())
+            tmp_path = pathlib.Path(tmp.name)
+
+        # Upload ke Google
+        uploaded_file = client.files.upload(file=tmp_path)
+
+        # Panggil model
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[uploaded_file, prompt]
+        )
+
+        # Hapus file lokal
+        tmp_path.unlink()
+
+        return {"response": response.text}
+
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": str(e)})
