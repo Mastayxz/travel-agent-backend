@@ -161,7 +161,7 @@ async def ask_agent(
 
         # Jalankan agent
         session_service = InMemorySessionService()
-        session = session_service.create_session(
+        session = await session_service.create_session(
             app_name="bali_travel_guide",
             user_id=email
         )
