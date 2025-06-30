@@ -19,7 +19,7 @@ from firebase_admin import auth as firebase_auth
 # Import travel agent
 from agents.travel_agent import travel_agent
 import re
-
+import base64
 # Import history model & MongoDB collection
 from app.models.history import ChatHistory, Message
 from app.db import history_collection
@@ -128,6 +128,10 @@ async def ask_agent(
         # Tambahkan pesan user (dengan atau tanpa gambar)
         if file:
             contents = await file.read()
+
+            # ✅ Encode image ke base64
+            base64_image = base64.b64encode(contents).decode("utf-8")
+
             image_parts = [types.Part(
                 inline_data=types.Blob(
                     mime_type=file.content_type,
@@ -147,6 +151,7 @@ async def ask_agent(
                 )
             )
         else:
+            base64_image = None
             chat_history.append(
                 types.Content(
                     role="user",
@@ -206,7 +211,9 @@ async def ask_agent(
         user_message = Message(
             role="user",
             content=query,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.utcnow(),
+            file_name=file.filename if file else None,
+            image=base64_image if file else None
         )
         agent_message = Message(
             role="agent",
@@ -231,7 +238,7 @@ async def ask_agent(
                 firebase_uid=user_data["uid"],
                 session_id=session_id,
                 messages=[user_message, agent_message],
-                timestamp=datetime.utcnow()
+                timestamp=agent_message.timestamp  # gunakan waktu agent_message sebagai waktu terakhir
             )
             history_collection.insert_one(new_history.dict())
 
@@ -241,6 +248,7 @@ async def ask_agent(
             "query": query,
             "response": result,
             "image_url": file.filename if file else None,
+            "image": base64_image,  # ✅ ini dikonsumsi frontend
             "session_id": session_id
         }
 

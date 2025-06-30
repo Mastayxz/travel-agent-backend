@@ -3,9 +3,11 @@ from typing import List, Optional
 from datetime import datetime
 
 class Message(BaseModel):
-    role: str  # 'user' atau 'agent'
+    role: str
     content: str
     timestamp: Optional[datetime] = None
+    file_name: Optional[str] = None
+    image: Optional[str] = None
 
 class ChatHistory(BaseModel):
     firebase_uid: str

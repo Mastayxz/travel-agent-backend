@@ -57,6 +57,7 @@ Otherwise, just give a regular answer.
 
 Stay fun and friendly 😄
 """
+
 ,
     tools=[google_search]
 )

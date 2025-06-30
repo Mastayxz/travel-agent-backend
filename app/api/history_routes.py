@@ -1,26 +1,42 @@
 from fastapi import APIRouter, HTTPException, Query
 from app.models.history import ChatHistory, Message
-from app.db import history_collection
+from app.db import history_collection, bookmarks_collection
 from datetime import datetime
 from bson import ObjectId
 
 router = APIRouter()
 
-@router.post("/history/save")
-async def save_chat_history(history: ChatHistory):
-    data = history.dict()
-    data["timestamp"] = history.timestamp or datetime.utcnow()
-    
-    # Pastikan timestamp untuk setiap pesan
-    for message in data["messages"]:
-        if not message.get("timestamp"):
-            message["timestamp"] = datetime.utcnow()
-
+@router.post("/history/save/{firebase_uid}/{session_id}")
+async def save_chat_history(
+    firebase_uid: str,
+    session_id: str,
+    body: dict  # atau ubah ke schema kustom jika ingin validasi
+):
     try:
-        result = history_collection.insert_one(data)
-        return {"message": "History saved successfully", "id": str(result.inserted_id)}
+        messages = body.get("messages", [])
+        timestamp = body.get("timestamp", datetime.utcnow())
+
+        # Pastikan timestamp per message
+        for msg in messages:
+            if "timestamp" not in msg:
+                msg["timestamp"] = datetime.utcnow()
+
+        history_data = {
+            "firebase_uid": firebase_uid,
+            "session_id": session_id,
+            "messages": messages,
+            "timestamp": timestamp,
+        }
+
+        result = bookmarks_collection.insert_one(history_data)
+
+        return {
+            "message": "History saved successfully",
+            "id": str(result.inserted_id),
+        }
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save history: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gagal menyimpan: {str(e)}")
 
 @router.get("/history/{firebase_uid}")
 async def get_user_history(
@@ -109,3 +125,13 @@ async def add_message_to_chat(google_id: str, session_id: str, message: Message)
         return {"message": "Message added successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to add message: {str(e)}")
+
+@router.get("/bookmark/{firebase_uid}")
+async def get_bookmark(firebase_uid: str):
+    try:
+        bookmarks = list(bookmarks_collection.find({"firebase_uid": firebase_uid}).sort("timestamp", -1))
+        for b in bookmarks:
+            b["_id"] = str(b["_id"])
+        return {"bookmarks": bookmarks}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal mengambil bookmark: {str(e)}")
