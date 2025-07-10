@@ -105,6 +105,18 @@ async def delete_chat_session(firebase_uid: str, session_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete chat session: {str(e)}")
 
+@router.delete("/bookmark/{firebase_uid}/{session_id}")
+async def delete_bookmark_session(firebase_uid: str, session_id: str):
+    try:
+        result = bookmarks_collection.delete_one({"firebase_uid": firebase_uid, "session_id": session_id})
+        
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Chat session not found")
+        
+        return {"message": "Chat session deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete chat session: {str(e)}")
+
 @router.post("/history/{firebase_uid}/{session_id}/messages")
 async def add_message_to_chat(google_id: str, session_id: str, message: Message):
     message_data = message.dict()
@@ -135,3 +147,4 @@ async def get_bookmark(firebase_uid: str):
         return {"bookmarks": bookmarks}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal mengambil bookmark: {str(e)}")
+ 

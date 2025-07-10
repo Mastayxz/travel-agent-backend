@@ -161,7 +161,7 @@ async def ask_agent(
 
         # Jalankan agent
         session_service = InMemorySessionService()
-        session = await session_service.create_session(
+        session = session_service.create_session(
             app_name="bali_travel_guide",
             user_id=email
         )
@@ -211,14 +211,14 @@ async def ask_agent(
         user_message = Message(
             role="user",
             content=query,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.utcnow().isoformat() + "Z",
             file_name=file.filename if file else None,
             image=base64_image if file else None
         )
         agent_message = Message(
             role="agent",
             content=result,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.utcnow().isoformat() + "Z"   
         )
 
         if existing_chat:
@@ -238,7 +238,7 @@ async def ask_agent(
                 firebase_uid=user_data["uid"],
                 session_id=session_id,
                 messages=[user_message, agent_message],
-                timestamp=agent_message.timestamp  # gunakan waktu agent_message sebagai waktu terakhir
+                timestamp=datetime.utcnow().isoformat() + "Z"  # gunakan waktu agent_message sebagai waktu terakhir
             )
             history_collection.insert_one(new_history.dict())
 

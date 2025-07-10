@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Request, APIRouter
-from pydantic import BaseModel, EmailStr, validator  
+from pydantic import BaseModel, EmailStr
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from pymongo import MongoClient
@@ -42,27 +42,42 @@ class TokenData(BaseModel):
 @router.post("/login")
 async def login(token_data: TokenData):
     try:
-        # Verifikasi ID token dari Firebase
+        # ✅ Verifikasi token Firebase
         decoded_token = firebase_auth.verify_id_token(token_data.token)
-        email = decoded_token["email"]
         uid = decoded_token["uid"]
-        name = decoded_token.get("name")
-        picture = decoded_token.get("picture")
+        email = decoded_token.get("email", "")
 
-        user = {
-            "firebase_uid": uid,
-            "email": email,
-            "name": name,
-            "picture": picture
-        }
+        # 🔍 Cari user di DB
+        existing_user = users_collection.find_one({"firebase_uid": uid})
 
-        # Simpan user jika belum ada
-        users_collection.update_one({"firebase_uid": uid}, {"$set": user}, upsert=True)
+        if existing_user:
+            # ✅ Jangan timpa name/picture — hanya update email jika berubah
+            if existing_user.get("email") != email:
+                users_collection.update_one(
+                    {"firebase_uid": uid},
+                    {"$set": {"email": email}}
+                )
+            # Ambil user dari DB (tetap pakai data hasil edit)
+            user = existing_user
+        else:
+            # 🆕 User baru, ambil name dan picture dari Firebase
+            user = {
+                "firebase_uid": uid,
+                "email": email,
+                "name": decoded_token.get("name"),
+                "picture": decoded_token.get("picture")
+            }
+            users_collection.insert_one(user)
+
+        # ✅ Fix _id agar bisa dikembalikan ke frontend
+        if "_id" in user:
+            user["_id"] = str(user["_id"])
 
         return {"message": "Login success", "user": user}
+
     except Exception as e:
+        print("Login error:", e)
         raise HTTPException(status_code=401, detail="Invalid Firebase token")
-    
 class RegisterData(BaseModel):
     email: EmailStr
     password: str

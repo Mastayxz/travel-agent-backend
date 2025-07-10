@@ -17,7 +17,7 @@
 
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import agent, auth_routes, history_routes
+from app.api import agent, auth_routes, history_routes, profile_routes
 import logging
 import os
 from dotenv import load_dotenv
@@ -44,7 +44,8 @@ logger = logging.getLogger(__name__)
 
 # Import your router
 from app.api.agent import router as agent_router
-from app.api.history_routes import router as history_router  # Import router riwayat chat
+from app.api.history_routes import router as history_router
+from app.api.profile_routes import router as profile_router# Import router riwayat chat
 
 # Create FastAPI app
 app = FastAPI(
@@ -65,7 +66,8 @@ app.add_middleware(
 # Include routes
 app.include_router(agent_router, prefix="/api")
 app.include_router(auth_routes.router, prefix="/auth")
-app.include_router(history_router, prefix="/api")  # Tambahkan router riwayat chat
+app.include_router(history_router, prefix="/api")
+app.include_router(profile_router)
 
 # Root endpoint
 @app.get("/")
