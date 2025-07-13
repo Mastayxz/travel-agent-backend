@@ -2,21 +2,37 @@ from fastapi import APIRouter, HTTPException, Query
 from app.models.history import ChatHistory, Message
 from app.db import history_collection, bookmarks_collection
 from datetime import datetime
+from fastapi.responses import JSONResponse
 from bson import ObjectId
 
 router = APIRouter()
-
 @router.post("/history/save/{firebase_uid}/{session_id}")
 async def save_chat_history(
     firebase_uid: str,
     session_id: str,
-    body: dict  # atau ubah ke schema kustom jika ingin validasi
+    body: dict,
 ):
     try:
+        # Cek apakah sesi sudah ada
+        existing = bookmarks_collection.find_one({
+            "firebase_uid": firebase_uid,
+            "session_id": session_id
+        })
+
+        if existing:
+           return JSONResponse(
+            status_code=200,  # atau 409 jika mau anggap duplikat
+            content={
+                "message": "Session already saved",
+                "id": str(existing["_id"]),
+                "status": "already_saved"
+            }
+        )
+
         messages = body.get("messages", [])
         timestamp = body.get("timestamp", datetime.utcnow())
 
-        # Pastikan timestamp per message
+        # Pastikan tiap message memiliki timestamp
         for msg in messages:
             if "timestamp" not in msg:
                 msg["timestamp"] = datetime.utcnow()

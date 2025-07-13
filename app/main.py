@@ -67,7 +67,7 @@ app.add_middleware(
 app.include_router(agent_router, prefix="/api")
 app.include_router(auth_routes.router, prefix="/auth")
 app.include_router(history_router, prefix="/api")
-app.include_router(profile_router)
+app.include_router(profile_router, prefix="/api")
 
 # Root endpoint
 @app.get("/")
